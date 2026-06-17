@@ -5,55 +5,64 @@ import re
 # =========================
 # 페이지 설정
 # =========================
-
 st.set_page_config(
     page_title="글맞",
     page_icon="📝",
     layout="centered"
 )
 
+st.title("📝 글맞")
+st.caption("자소서 · 과제 · 보고서 문장 분석기")
+
+st.divider()
+
 # =========================
-# 금지어 DB
+# 입력
+# =========================
+text = st.text_area("내용 입력", height=350)
+
+# =========================
+# DB 구조 (안정형)
 # =========================
 
 WORD_DB = {
-    "근데": ("🔴 위험", "그러나, 하지만 사용"),
-    "암튼": ("🔴 위험", "어쨌든 사용"),
-    "겁나": ("🔴 위험", "비속어 제거"),
+    # 위험 (구어체/비문서)
+    "근데": ("🔴 위험", "그러나/하지만"),
+    "암튼": ("🔴 위험", "어쨌든"),
+    "겁나": ("🔴 위험", "삭제"),
     "ㅋㅋ": ("🔴 위험", "삭제"),
     "ㅎㅎ": ("🔴 위험", "삭제"),
-    "ㄹㅇ": ("🔴 위험", "삭제"),
 
-    "진짜": ("🟡 주의", "매우, 상당히 사용"),
-    "엄청": ("🟡 주의", "상당히 사용"),
-    "완전": ("🟡 주의", "과장 표현 수정"),
-    "되게": ("🟡 주의", "공식 표현 사용"),
+    # 주의 (표현 문제)
+    "진짜": ("🟡 주의", "매우/상당히"),
+    "엄청": ("🟡 주의", "상당히"),
+    "완전": ("🟡 주의", "과장 표현"),
+    "되게": ("🟡 주의", "공식 표현"),
     "솔직히": ("🟡 주의", "삭제 권장"),
     "아마": ("🟡 주의", "추측 표현"),
-    "같다": ("🟡 주의", "근거 제시"),
-    "느꼈다": ("🟡 주의", "이유 추가"),
+    "같다": ("🟡 주의", "근거 필요"),
 
-    "열심히": ("🔵 개선", "행동 사례 제시"),
-    "최선을 다해": ("🔵 개선", "구체적 행동 작성"),
-    "성실한": ("🔵 개선", "사례로 증명"),
-    "책임감": ("🔵 개선", "행동으로 설명"),
-    "도전": ("🔵 개선", "구체화"),
-    "성장": ("🔵 개선", "변화 과정 작성"),
-    "발전": ("🔵 개선", "결과 제시"),
-    "많은": ("🔵 개선", "수치 사용"),
-    "다양한": ("🔵 개선", "구체화"),
-    "제가": ("🔵 개선", "반복 사용 줄이기"),
-    "저는": ("🔵 개선", "반복 사용 줄이기"),
+    # 추상어 (자소서 핵심 문제)
+    "열심히": ("💡 추상어", "행동으로 설명"),
+    "성장": ("💡 추상어", "과정/수치"),
+    "도전": ("💡 추상어", "구체화"),
+    "책임감": ("💡 추상어", "사례 필요"),
+    "많은": ("💡 추상어", "수치화"),
+    "다양한": ("💡 추상어", "구체화"),
+
+    # 반복어 (자기소개서 특화)
+    "제가": ("🔁 반복", "반복 줄이기"),
+    "저는": ("🔁 반복", "반복 줄이기"),
 }
 
 # =========================
-# 함수
+# 분석 함수
 # =========================
 
-def analyze_text(text):
+def analyze(text):
     results = []
 
-    for word, (level, guide) in WORD_DB.items():
+    for word, (level, tip) in WORD_DB.items():
         count = text.count(word)
 
         if count > 0:
@@ -61,165 +70,95 @@ def analyze_text(text):
                 "등급": level,
                 "표현": word,
                 "횟수": count,
-                "수정 가이드": guide
+                "수정 가이드": tip
             })
 
     return results
 
 
-def highlight_text(text):
-
-    words = sorted(
-        WORD_DB.keys(),
-        key=len,
-        reverse=True
-    )
-
-    pattern = "|".join(
-        map(re.escape, words)
-    )
-
-    def replace(match):
-        return f":red[{match.group(0)}]"
-
-    return re.sub(
-        pattern,
-        replace,
-        text
-    )
-
-
 # =========================
-# 헤더
+# 하이라이트 함수 (안전형)
 # =========================
 
-st.title("📝 글맞")
-st.caption("글자 수 분석 + 자소서/과제 문장 검사기")
+def highlight(text):
 
-st.divider()
+    if not text:
+        return ""
 
-# =========================
-# 입력창
-# =========================
+    words = sorted(WORD_DB.keys(), key=len, reverse=True)
+    pattern = "|".join(map(re.escape, words))
 
-text = st.text_area(
-    "내용 입력",
-    height=350,
-    placeholder="내용을 입력하세요..."
-)
+    def repl(m):
+        return f":red[{m.group(0)}]"
+
+    return re.sub(pattern, repl, text)
+
 
 # =========================
 # 통계
 # =========================
 
-char_with_space = len(text)
-char_without_space = len(re.sub(r"\s", "", text))
+char_with = len(text)
+char_no = len(re.sub(r"\s", "", text))
 word_count = len(text.split()) if text.strip() else 0
-paragraph_count = len(
-    [x for x in text.splitlines() if x.strip()]
-)
+para_count = len([x for x in text.splitlines() if x.strip()])
 
 st.subheader("📊 문서 통계")
 
 c1, c2, c3, c4 = st.columns(4)
 
-c1.metric("공백 포함", f"{char_with_space:,}")
-c2.metric("공백 제외", f"{char_without_space:,}")
+c1.metric("공백 포함", f"{char_with:,}")
+c2.metric("공백 제외", f"{char_no:,}")
 c3.metric("어절 수", f"{word_count:,}")
-c4.metric("문단 수", f"{paragraph_count:,}")
+c4.metric("문단 수", f"{para_count:,}")
 
 # =========================
-# 목표 글자 수
+# 목표 글자수
 # =========================
 
-target = st.number_input(
-    "목표 글자 수",
-    min_value=100,
-    value=1000,
-    step=100
-)
+target = st.number_input("목표 글자 수", 100, 5000, 1000)
 
-progress = min(
-    char_with_space / target,
-    1.0
-)
+progress = min(char_with / target, 1.0)
 
 st.progress(progress)
-
-st.caption(
-    f"{char_with_space:,} / {target:,}자 "
-    f"({progress*100:.1f}%)"
-)
+st.caption(f"{char_with:,}/{target:,}자 ({progress*100:.1f}%)")
 
 st.divider()
 
 # =========================
-# 분석
+# 분석 실행
 # =========================
 
-st.subheader("🚨 문장 분석")
+st.subheader("🚨 분석 결과")
 
 if not text.strip():
-
-    st.info(
-        "텍스트를 입력하면 분석 결과가 표시됩니다."
-    )
+    st.info("텍스트를 입력하세요")
 
 else:
 
-    results = analyze_text(text)
+    results = analyze(text)
 
     if not results:
-
-        st.success(
-            "✅ 감점 요소가 발견되지 않았습니다."
-        )
+        st.success("문제 표현 없음")
 
     else:
 
-        danger = sum(
-            1 for r in results
-            if r["등급"] == "🔴 위험"
-        )
-
-        warning = sum(
-            1 for r in results
-            if r["등급"] == "🟡 주의"
-        )
-
-        improve = sum(
-            1 for r in results
-            if r["등급"] == "🔵 개선"
-        )
+        # 등급 집계
+        levels = [r["등급"] for r in results]
 
         st.warning(
-            f"위험 {danger}개 | "
-            f"주의 {warning}개 | "
-            f"개선 {improve}개"
+            f"🔴 위험 {levels.count('🔴 위험')} | "
+            f"🟡 주의 {levels.count('🟡 주의')} | "
+            f"💡 추상어 {levels.count('💡 추상어')} | "
+            f"🔁 반복 {levels.count('🔁 반복')}"
         )
 
-        st.markdown("### 🔍 문제 표현")
-
-        st.markdown(
-            highlight_text(text)
-        )
+        st.markdown("### 🔍 수정 위치")
+        st.markdown(highlight(text))
 
         st.markdown("### 📋 수정 가이드")
 
         df = pd.DataFrame(results)
-
-        priority = {
-            "🔴 위험": 0,
-            "🟡 주의": 1,
-            "🔵 개선": 2
-        }
-
-        df["정렬"] = df["등급"].map(priority)
-
-        df = (
-            df.sort_values("정렬")
-              .drop(columns=["정렬"])
-        )
 
         st.dataframe(
             df,
@@ -234,8 +173,7 @@ else:
 st.divider()
 
 st.download_button(
-    "📥 원문 다운로드",
-    data=text,
-    file_name="글맞_분석결과.txt",
-    mime="text/plain"
+    "📥 결과 다운로드",
+    text,
+    file_name="글맞_결과.txt"
 )
