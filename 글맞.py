@@ -63,10 +63,10 @@ if text.strip():
         matches = re.findall(pattern, text)
         
         if matches:
-            found_forbidden.append((word, tip, len(matches)))
-            # [핵심 기능 추가] 원본 텍스트에서 틀린 단어들을 빨간색 하이라이트 스타일로 변경
+            found_forbidden.append({"발견된 단어": word, "발생 횟수": f"{len(matches)}회", "수정 가이드": tip})
+            # 원본 텍스트에서 틀린 단어들을 빨간색 하이라이트 스타일로 변경
             for match in set(matches):
-                highlighted_text = re.sub(rf"\b{match}\b", f":red[{match}]", highlighted_text)
+                highlighted_text = re.sub(rf"\b{match}\b", f" :red[{match}] ", highlighted_text)
 
 # 6. 필터링 결과 및 틀린 위치 출력 UI
 if not text.strip():
@@ -74,15 +74,15 @@ if not text.strip():
 elif len(found_forbidden) == 0:
     st.success("✅ 감점 요인이 될 만한 구어체나 금지어가 없습니다. 완벽합니다!")
 else:
-    st.warning(f"문맥에 어울리지 않는 표현이 총 {sum(m[2] for m in found_forbidden)}회 발견되었습니다.")
+    st.warning(f"문맥에 어울리지 않는 표현이 발견되었습니다.")
     
     # 어디가 틀렸는지 시각적으로 보여주는 박스
     st.markdown("### 🔍 틀린 부분 확인 (빨간색 표시)")
     st.caption("아래 본문에서 빨간색으로 표시된 단어들을 수정하세요.")
-    st.code(highlighted_text, language="markdown") # 붉은색 마크다운이 보이도록 처리
+    st.markdown(highlighted_text) 
     
     st.markdown("---")
-    st.markdown("### 📋 수정 가이드 가이드")
-    # 마크다운 표 형태로 결과 정렬
-    st.markdown("| 발견된 단어 | 발생 횟수 | 수정 가이드 |")
-    st.markdown("| :--- | :
+    st.markdown("### 📋 수정 가이드")
+    
+    # [에러 해결책] 따옴표 깨지는 마크다운 표 대신, 스트림릿 전용 테이블 함수로 깔끔하게 출력
+    st.table(found_forbidden)
