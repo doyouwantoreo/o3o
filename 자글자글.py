@@ -2,10 +2,10 @@ import streamlit as st
 import re
 
 # 페이지 설정 (넓은 화면 레이아웃)
-st.set_page_config(page_title="자글자글(za-geul)프리미엄 글자 수 세기 & 맞춤형 검사기", page_icon="📝", layout="wide")
+st.set_page_config(page_title="자글자글(za-geul) 글자 수 세기 & 맞춤형 검사기", page_icon="📝", layout="wide")
 
 # 상단 타이틀
-st.title("📝 BrieFix - 프리미엄 글자 수 세기 & 맞춤형 검사기")
+st.title("📝 프리미엄 글자 수 세기 & 맞춤형 검사기")
 st.subheader("리포트, 자소서, 이력서 작성을 위한 학생의 필수 툴")
 st.markdown("---")
 
