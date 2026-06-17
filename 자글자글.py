@@ -55,14 +55,11 @@ found_forbidden = []
 
 if text.strip():
     for word, tip in forbidden_words.items():
-        # [핵심 수정] 정규식을 사용하여 독립된 단어이거나, 뒤에 조사(가, 는, 를, 에, 도 등)가 붙은 경우만 정확하게 타겟팅
-        # 단어의 앞뒤가 다른 글자 속에 파묻혀 있는 경우(예: 사진작가)는 제외합니다.
+        # 정규식을 사용하여 독립된 단어이거나, 뒤에 조사가 붙은 경우만 정확하게 타겟팅
         pattern = rf"\b{word}(?:이|가|은|는|을|를|에|와|과|도|로|으로)?\b"
         
-        # 문장 내에서 해당 패턴을 찾아냄
         matches = re.findall(pattern, text)
         if matches:
-            # 중복 제거를 위해 매칭된 실제 단어 형태와 팁을 저장
             found_forbidden.append((word, tip, len(matches)))
 
 # 결과 출력 UI
@@ -75,6 +72,4 @@ else:
     
     # 테이블 형식으로 깔끔하게 리스팅
     st.markdown("| 발견된 단어 | 발생 횟수 | 수정 가이드 |")
-    st.markdown("| :--- | :--- | :--- |")
-    for word, tip, count in found_forbidden:
-        st.markdown(f"| **{word}** | {count}회 | {tip} |"))
+    st.markdown("|
