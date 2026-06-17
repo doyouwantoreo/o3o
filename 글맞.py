@@ -1,88 +1,241 @@
 import streamlit as st
+import pandas as pd
 import re
 
-# 1. 페이지 설정 및 브라우저 탭 타이틀
-st.set_page_config(page_title="글맞 | 글자 수 세기 & 문장 교정", page_icon="📝", layout="centered")
+# =========================
+# 페이지 설정
+# =========================
 
-# 상단 타이틀 및 설명
-st.title("📝 글맞")
-st.caption("리포트, 자소서, 이력서 작성을 위한 실시간 글자 수 세기 & 문장 필터링 툴")
-st.markdown("---")
-
-# 2. 메인 텍스트 입력창
-text = st.text_area(
-    "여기에 내용을 입력하거나 붙여넣으세요.",
-    placeholder="내용을 입력하면 하단 대시보드에 실시간으로 반영됩니다...",
-    height=320,
-    label_visibility="visible"
+st.set_page_config(
+    page_title="글맞",
+    page_icon="📝",
+    layout="centered"
 )
 
-st.markdown("---")
+# =========================
+# 금지어 DB
+# =========================
 
-# 3. 문서 통계 데이터 계산 로직
-char_with_spaces = len(text)
-char_no_spaces = len(re.sub(r'\s', '', text))
-word_count = len(text.split()) if text.strip() else 0
-paragraph_count = len([p for p in text.split('\n') if p.strip()]) if text.strip() else 0
+WORD_DB = {
+    "근데": ("🔴 위험", "그러나, 하지만 사용"),
+    "암튼": ("🔴 위험", "어쨌든 사용"),
+    "겁나": ("🔴 위험", "비속어 제거"),
+    "ㅋㅋ": ("🔴 위험", "삭제"),
+    "ㅎㅎ": ("🔴 위험", "삭제"),
+    "ㄹㅇ": ("🔴 위험", "삭제"),
 
-# 4. 실시간 분석 결과 대시보드 (4열 배치)
-st.subheader("📊 실시간 분석 결과")
-col1, col2, col3, col4 = st.columns(4)
-with col1:
-    st.metric(label="공백 포함", value=f"{char_with_spaces:,} 자")
-with col2:
-    st.metric(label="공백 제외", value=f"{char_no_spaces:,} 자")
-with col3:
-    st.metric(label="단어 수", value=f"{word_count:,} 개")
-with col4:
-    st.metric(label="문단 수", value=f"{paragraph_count:,} 개")
+    "진짜": ("🟡 주의", "매우, 상당히 사용"),
+    "엄청": ("🟡 주의", "상당히 사용"),
+    "완전": ("🟡 주의", "과장 표현 수정"),
+    "되게": ("🟡 주의", "공식 표현 사용"),
+    "솔직히": ("🟡 주의", "삭제 권장"),
+    "아마": ("🟡 주의", "추측 표현"),
+    "같다": ("🟡 주의", "근거 제시"),
+    "느꼈다": ("🟡 주의", "이유 추가"),
 
-st.markdown("---")
-
-# 5. 정밀 문장 필터링 알고리즘 섹션
-st.subheader("🚨 맞춤형 문장 필터링")
-
-# 대학생 과제/자소서용 금지어 사전 데이터셋
-forbidden_words = {
-    "근데": "구어체 표현입니다. '그러나', '하지만'으로 수정하세요.",
-    "암튼": "속어 표현입니다. '어쨌든', '결과적으로'로 수정하세요.",
-    "진짜": "주관적인 강조입니다. '매우', '상당히' 등으로 대체하세요.",
-    "엄청": "과장된 표현입니다. '대단히', '극히' 등으로 수정하세요.",
-    "알바": "공식 문서 표현이 아닙니다. '아르바이트'로 수정하세요.",
-    "솔직히": "감정적 표현입니다. 이 단어를 빼고 문장을 담백하게 고치세요.",
-    "제가": "자기소개서에서는 '제가'를 반복하기보다 주어를 생략하는 것이 좋습니다."
+    "열심히": ("🔵 개선", "행동 사례 제시"),
+    "최선을 다해": ("🔵 개선", "구체적 행동 작성"),
+    "성실한": ("🔵 개선", "사례로 증명"),
+    "책임감": ("🔵 개선", "행동으로 설명"),
+    "도전": ("🔵 개선", "구체화"),
+    "성장": ("🔵 개선", "변화 과정 작성"),
+    "발전": ("🔵 개선", "결과 제시"),
+    "많은": ("🔵 개선", "수치 사용"),
+    "다양한": ("🔵 개선", "구체화"),
+    "제가": ("🔵 개선", "반복 사용 줄이기"),
+    "저는": ("🔵 개선", "반복 사용 줄이기"),
 }
 
-found_forbidden = []
-highlighted_text = text
+# =========================
+# 함수
+# =========================
 
-if text.strip():
-    for word, tip in forbidden_words.items():
-        # 독립된 단어 형태이거나 한국어 조사가 붙은 경우만 정밀 매칭 (오탐 방지)
-        pattern = rf"\b{word}(?:이|가|은|는|을|를|에|와|과|도|로|으로)?\b"
-        matches = re.findall(pattern, text)
-        
-        if matches:
-            found_forbidden.append({"발견된 단어": word, "발생 횟수": f"{len(matches)}회", "수정 가이드": tip})
-            # 원본 텍스트에서 틀린 단어들을 빨간색 하이라이트 스타일로 변경
-            for match in set(matches):
-                highlighted_text = re.sub(rf"\b{match}\b", f" :red[{match}] ", highlighted_text)
+def analyze_text(text):
+    results = []
 
-# 6. 필터링 결과 및 틀린 위치 출력 UI
+    for word, (level, guide) in WORD_DB.items():
+        count = text.count(word)
+
+        if count > 0:
+            results.append({
+                "등급": level,
+                "표현": word,
+                "횟수": count,
+                "수정 가이드": guide
+            })
+
+    return results
+
+
+def highlight_text(text):
+
+    words = sorted(
+        WORD_DB.keys(),
+        key=len,
+        reverse=True
+    )
+
+    pattern = "|".join(
+        map(re.escape, words)
+    )
+
+    def replace(match):
+        return f":red[{match.group(0)}]"
+
+    return re.sub(
+        pattern,
+        replace,
+        text
+    )
+
+
+# =========================
+# 헤더
+# =========================
+
+st.title("📝 글맞")
+st.caption("글자 수 분석 + 자소서/과제 문장 검사기")
+
+st.divider()
+
+# =========================
+# 입력창
+# =========================
+
+text = st.text_area(
+    "내용 입력",
+    height=350,
+    placeholder="내용을 입력하세요..."
+)
+
+# =========================
+# 통계
+# =========================
+
+char_with_space = len(text)
+char_without_space = len(re.sub(r"\s", "", text))
+word_count = len(text.split()) if text.strip() else 0
+paragraph_count = len(
+    [x for x in text.splitlines() if x.strip()]
+)
+
+st.subheader("📊 문서 통계")
+
+c1, c2, c3, c4 = st.columns(4)
+
+c1.metric("공백 포함", f"{char_with_space:,}")
+c2.metric("공백 제외", f"{char_without_space:,}")
+c3.metric("어절 수", f"{word_count:,}")
+c4.metric("문단 수", f"{paragraph_count:,}")
+
+# =========================
+# 목표 글자 수
+# =========================
+
+target = st.number_input(
+    "목표 글자 수",
+    min_value=100,
+    value=1000,
+    step=100
+)
+
+progress = min(
+    char_with_space / target,
+    1.0
+)
+
+st.progress(progress)
+
+st.caption(
+    f"{char_with_space:,} / {target:,}자 "
+    f"({progress*100:.1f}%)"
+)
+
+st.divider()
+
+# =========================
+# 분석
+# =========================
+
+st.subheader("🚨 문장 분석")
+
 if not text.strip():
-    st.info("텍스트를 입력하면 분석 결과와 수정 제안이 여기에 표시됩니다.")
-elif len(found_forbidden) == 0:
-    st.success("✅ 감점 요인이 될 만한 구어체나 금지어가 없습니다. 완벽합니다!")
+
+    st.info(
+        "텍스트를 입력하면 분석 결과가 표시됩니다."
+    )
+
 else:
-    st.warning(f"문맥에 어울리지 않는 표현이 발견되었습니다.")
-    
-    # 어디가 틀렸는지 시각적으로 보여주는 박스
-    st.markdown("### 🔍 틀린 부분 확인 (빨간색 표시)")
-    st.caption("아래 본문에서 빨간색으로 표시된 단어들을 수정하세요.")
-    st.markdown(highlighted_text) 
-    
-    st.markdown("---")
-    st.markdown("### 📋 수정 가이드")
-    
-    # [에러 해결책] 따옴표 깨지는 마크다운 표 대신, 스트림릿 전용 테이블 함수로 깔끔하게 출력
-    st.table(found_forbidden)
+
+    results = analyze_text(text)
+
+    if not results:
+
+        st.success(
+            "✅ 감점 요소가 발견되지 않았습니다."
+        )
+
+    else:
+
+        danger = sum(
+            1 for r in results
+            if r["등급"] == "🔴 위험"
+        )
+
+        warning = sum(
+            1 for r in results
+            if r["등급"] == "🟡 주의"
+        )
+
+        improve = sum(
+            1 for r in results
+            if r["등급"] == "🔵 개선"
+        )
+
+        st.warning(
+            f"위험 {danger}개 | "
+            f"주의 {warning}개 | "
+            f"개선 {improve}개"
+        )
+
+        st.markdown("### 🔍 문제 표현")
+
+        st.markdown(
+            highlight_text(text)
+        )
+
+        st.markdown("### 📋 수정 가이드")
+
+        df = pd.DataFrame(results)
+
+        priority = {
+            "🔴 위험": 0,
+            "🟡 주의": 1,
+            "🔵 개선": 2
+        }
+
+        df["정렬"] = df["등급"].map(priority)
+
+        df = (
+            df.sort_values("정렬")
+              .drop(columns=["정렬"])
+        )
+
+        st.dataframe(
+            df,
+            use_container_width=True,
+            hide_index=True
+        )
+
+# =========================
+# 다운로드
+# =========================
+
+st.divider()
+
+st.download_button(
+    "📥 원문 다운로드",
+    data=text,
+    file_name="글맞_분석결과.txt",
+    mime="text/plain"
+)
